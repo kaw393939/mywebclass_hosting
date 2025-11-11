@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - CF_ZONE_API_TOKEN=${CF_ZONE_API_TOKEN}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/acme.json:/acme.json
+      - ./traefik/config.yml:/config.yml:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.mywebclass.org`)"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.traefik.middlewares=traefik-https-redirect"
+      - "traefik.http.routers.traefik-secure.entrypoints=https"
+      - "traefik.http.routers.traefik-secure.rule=Host(`traefik.mywebclass.org`)"
+      - "traefik.http.routers.traefik-secure.middlewares=traefik-auth"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].main=mywebclass.org"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.mywebclass.org"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_REVIVE_STOPPED=false
+      - WATCHTOWER_NO_STARTUP_MESSAGE=false
+    networks:
+      - web
+
+  httpd:
+    image: httpd:2.4
+    container_name: httpd-webserver
+    restart: unless-stopped
+    networks:
+      - web
+    volumes:
+      - ./www:/usr/local/apache2/htdocs
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.httpd.entrypoints=http"
+      - "traefik.http.routers.httpd.rule=Host(`mywebclass.org`) || Host(`www.mywebclass.org`)"
+      - "traefik.http.middlewares.httpd-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.httpd.middlewares=httpd-https-redirect"
+      - "traefik.http.routers.httpd-secure.entrypoints=https"
+      - "traefik.http.routers.httpd-secure.rule=Host(`mywebclass.org`) || Host(`www.mywebclass.org`)"
+      - "traefik.http.routers.httpd-secure.tls=true"
+      - "traefik.http.routers.httpd-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.httpd-secure.service=httpd"
+      - "traefik.http.services.httpd.loadbalancer.server.port=80"
+
+networks:
+  web:
+    external: false

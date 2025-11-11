@@ -1,0 +1,32 @@
+# Environment variables
+.env
+
+# Let's Encrypt certificates
+traefik/acme.json
+
+# Docker volumes
+volumes/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup
